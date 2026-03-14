@@ -90,26 +90,22 @@
       if (bLogout) bLogout.style.display = show ? "inline-flex" : "none";
 
       // ファンクラブ管理パネル:
-      // 「管理者ログイン済み」かつ「ファンクラブ入場済み」の両方を満たす場合のみ表示
+      // 「管理者ログイン済み」かつ「fc-contentが表示中（入場済み）」の両方を要求
       const fcAdmin   = document.getElementById("fc-admin-panel");
       const fcContent = document.getElementById("fc-content");
-      const fcUnlocked = fcContent && !fcContent.classList.contains("hidden");
+      // style.displayで判定（showFanclubContentがstyleで制御しているため）
+      const fcUnlocked = fcContent &&
+        fcContent.style.display !== "none" &&
+        fcContent.style.display !== "";
       if (fcAdmin) {
-        // hidden クラスで確実に制御（style.display より優先度が明確）
-        if (show && fcUnlocked) {
-          fcAdmin.classList.remove("hidden");
-        } else {
-          fcAdmin.classList.add("hidden");
-        }
+        fcAdmin.style.display = (show && fcUnlocked) ? "block" : "none";
       }
-      // 管理者用の「直接入場」ボタンをゲート画面に表示/非表示
+      // 管理者用「直接入場」ボタン: 管理者かつゲートが表示中の時だけ出す
       const fcAdminEntry = document.getElementById("fc-admin-entry");
+      const fcGate = document.getElementById("fc-gate");
+      const gateVisible = fcGate && fcGate.style.display !== "none";
       if (fcAdminEntry) {
-        if (show) {
-          fcAdminEntry.classList.remove("hidden");
-        } else {
-          fcAdminEntry.classList.add("hidden");
-        }
+        fcAdminEntry.style.display = (show && gateVisible !== false) ? "flex" : "none";
       }
 
       // 掲示板の削除ボタン再描画
@@ -249,20 +245,39 @@
     }
 
     function showFanclubContent(label) {
-      document.getElementById("fc-gate")?.classList.add("hidden");
-      document.getElementById("fc-content")?.classList.remove("hidden");
+      // ゲート関連を全て非表示
+      const gate  = document.getElementById("fc-gate");
+      const entry = document.getElementById("fc-admin-entry");
+      if (gate)  gate.style.display  = "none";
+      if (entry) entry.style.display = "none";
+
+      // コンテンツを表示
+      const content = document.getElementById("fc-content");
+      if (content) content.style.display = "block";
+
       const lbl = document.getElementById("fc-member-label");
       if (lbl) lbl.textContent = label;
-      // 入場後に管理者状態を再反映（管理者なら管理パネルを表示）
+
+      // 管理者状態を再反映（管理者なら管理パネルを表示）
       refreshAdminUI();
     }
 
     function showFanclubGate() {
-      document.getElementById("fc-gate")?.classList.remove("hidden");
-      document.getElementById("fc-content")?.classList.add("hidden");
-      // 退出時は管理パネルも隠す（hidden クラスで確実に非表示）
+      // ゲートを再表示
+      const gate = document.getElementById("fc-gate");
+      if (gate) gate.style.display = "";
+
+      // 管理者入場ボタンは refreshAdminUI に委ねる（管理者ならまた表示される）
+      // コンテンツを非表示
+      const content = document.getElementById("fc-content");
+      if (content) content.style.display = "none";
+
+      // 管理パネルを隠す
       const fcAdmin = document.getElementById("fc-admin-panel");
-      if (fcAdmin) fcAdmin.classList.add("hidden");
+      if (fcAdmin) fcAdmin.style.display = "none";
+
+      // 管理者入場ボタンの状態を再評価
+      refreshAdminUI();
     }
 
     /* ── 管理者: コード一覧をリアルタイム表示 ── */
@@ -893,6 +908,17 @@
     ══════════════════════════════════════════ */
     .hidden { display: none !important; }
 
+    /* fc-admin-entry: flexレイアウトはCSSで定義（style属性と競合させない） */
+    .fc-admin-entry-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .fc-admin-entry-wrap.hidden { display: none !important; }
+    .fc-admin-panel.hidden { display: none !important; }
+
     /* ゲート（コード入力画面） */
     .fc-gate {
       display: flex;
@@ -1355,13 +1381,13 @@
         </div>
 
         <!-- 管理者専用: 直接入場ボタン（ブログでログイン済みの場合のみ表示） -->
-        <div id="fc-admin-entry" class="hidden" style="flex-direction:column; align-items:center; gap:8px; margin-top:8px;">
+        <div id="fc-admin-entry" class="fc-admin-entry-wrap hidden">
           <div style="font-family:'Share Tech Mono',monospace; font-size:.65rem; color:var(--text-dim); letter-spacing:.1em;">── 管理者専用 ──</div>
           <button class="hud-btn hud-btn-ghost" id="fc-admin-direct-btn">🔑 管理者として入場</button>
         </div>
 
         <!-- ファンクラブコンテンツ（認証済み） -->
-        <div id="fc-content" class="hidden">
+        <div id="fc-content" style="display:none;">
           <div class="fc-content-header">
             <div>
               <div class="fc-welcome">WELCOME TO KAIROS FANCLUB</div>
