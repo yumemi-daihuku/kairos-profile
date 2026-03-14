@@ -1299,6 +1299,69 @@
     .stamp-btn:hover .stamp-count { color: var(--accent3); }
     .stamp-btn.pressed .stamp-count { color: var(--accent3); }
 
+
+    /* ── 利用規約ページ ────────────────────────── */
+    .terms-body {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .terms-section {
+      border-left: 3px solid var(--border);
+      padding-left: 16px;
+    }
+
+    .terms-heading {
+      font-family: 'Orbitron', sans-serif;
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+
+    .terms-body p {
+      font-size: .9rem;
+      line-height: 1.9;
+      color: var(--text);
+    }
+
+    .terms-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .terms-list li {
+      font-size: .88rem;
+      line-height: 1.7;
+      color: var(--text);
+      padding-left: 16px;
+      position: relative;
+    }
+
+    .terms-list li::before {
+      content: '▸';
+      position: absolute;
+      left: 0;
+      color: var(--accent2);
+      font-size: .75rem;
+    }
+
+    .terms-footer {
+      margin-top: 8px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .7rem;
+      color: var(--text-dim);
+      letter-spacing: .08em;
+      text-align: right;
+    }
+
     /* ══════════════════════════════════════════
        モバイル対応
     ══════════════════════════════════════════ */
@@ -1350,6 +1413,10 @@
       <button class="nav-tab" data-tab="fanclub">
         <span class="nav-tab-icon">🎫</span>
         <span class="nav-tab-label">ファンクラブ</span>
+      </button>
+      <button class="nav-tab" data-tab="terms">
+        <span class="nav-tab-icon">📋</span>
+        <span class="nav-tab-label">利用規約</span>
       </button>
     </div>
 
@@ -1599,14 +1666,7 @@
           <div class="card accent3" style="margin-bottom:16px;padding:20px 24px;">
             <div class="section-title purple" style="margin-bottom:14px;">FC限定リンク</div>
             <div style="display:flex;flex-direction:column;gap:10px;">
-              <a class="link-card" href="https://uneven-tub-4c4.notion.site/1-7-3216b0558d7381e0b03cd65695b2470c?pvs=74" target="_blank" rel="noopener">
-                <div class="link-card-icon">📓</div>
-                <div class="link-card-body">
-                  <div class="link-card-title" style="color:var(--accent3);">Notion — 1-7キャラ百科</div>
-                  <div class="link-card-desc">クラスキャラクターまとめ</div>
-                </div>
-                <div class="link-card-arrow">→</div>
-              </a>
+
               <a class="link-card" href="https://sites.google.com/view/dainisshinteikokukennpou/%E7%AC%AC%E6%97%A5%E9%80%B2%E5%B8%9D%E5%9C%8B%E6%86%B2%E6%B3%95" target="_blank" rel="noopener">
                 <div class="link-card-icon">📜</div>
                 <div class="link-card-body">
@@ -1659,6 +1719,70 @@
         </div>
 
       </div>    </div>
+    </div>
+
+
+    <!-- ▼ 利用規約 ──────────────────────────────── -->
+    <div id="page-terms" class="page-content">
+      <div class="hud-header">
+        <span><span class="hud-dot"></span>TERMS.EXE</span>
+        <span>LAST UPDATED: 2026/03/14</span>
+      </div>
+
+      <div class="card">
+        <div class="section-title">📋 利用規約</div>
+
+        <div class="terms-body">
+
+          <div class="terms-section">
+            <div class="terms-heading">第1条 — はじめに</div>
+            <p>本サイト「KAIROS PLAYER PROFILE」（以下「本サイト」）をご利用いただく前に、以下の利用規約をよくお読みください。本サイトを利用した時点で、本規約に同意したものとみなします。</p>
+          </div>
+
+          <div class="terms-section">
+            <div class="terms-heading">第2条 — 禁止事項</div>
+            <p>利用者は以下の行為を行ってはなりません。</p>
+            <ul class="terms-list">
+              <li>掲示板・ブログへの誹謗中傷・差別的な発言</li>
+              <li>個人情報の無断掲載</li>
+              <li>スパムや広告目的の書き込み</li>
+              <li>法令に違反する行為、またはそのおそれのある行為</li>
+              <li>本サイトの運営を妨害する行為</li>
+              <li>シリアルコードの無断転載・配布</li>
+            </ul>
+          </div>
+
+          <div class="terms-section">
+            <div class="terms-heading">第3条 — 投稿コンテンツ</div>
+            <p>掲示板・ブログへの投稿内容の著作権は投稿者に帰属しますが、本サイト管理者（カイロス）は不適切と判断した投稿を予告なく削除できるものとします。投稿内容に起因するトラブルについて、管理者は責任を負いません。</p>
+          </div>
+
+          <div class="terms-section">
+            <div class="terms-heading">第4条 — ファンクラブ</div>
+            <p>ファンクラブへのアクセスにはシリアルコードが必要です。シリアルコードは管理者から直接配布されたもののみ有効です。コードの第三者への譲渡・公開は禁止します。管理者はいつでもコードを無効化できるものとします。</p>
+          </div>
+
+          <div class="terms-section">
+            <div class="terms-heading">第5条 — 免責事項</div>
+            <p>本サイトは個人が運営する非営利サイトです。本サイトの利用により生じた損害について、管理者は一切の責任を負いません。また、本サイトは予告なく内容の変更・停止を行う場合があります。</p>
+          </div>
+
+          <div class="terms-section">
+            <div class="terms-heading">第6条 — 規約の変更</div>
+            <p>管理者は必要に応じて本規約を変更できるものとします。変更後の規約は本ページに掲載された時点で効力を持ちます。</p>
+          </div>
+
+          <div class="terms-section">
+            <div class="terms-heading">第7条 — お問い合わせ</div>
+            <p>本規約に関するご質問は掲示板または直接管理者までお問い合わせください。</p>
+          </div>
+
+          <div class="terms-footer">
+            制定日：2026年3月14日　／　管理者：KAIROS
+          </div>
+
+        </div>
+      </div>
     </div>
 
   </main>
