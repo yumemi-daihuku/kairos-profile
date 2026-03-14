@@ -90,16 +90,27 @@
       if (bLogout) bLogout.style.display = show ? "inline-flex" : "none";
 
       // ファンクラブ管理パネル:
-      // 「管理者ログイン済み」かつ「ファンクラブ入場済み（fc-contentが表示中）」の両方を要求
+      // 「管理者ログイン済み」かつ「ファンクラブ入場済み」の両方を満たす場合のみ表示
       const fcAdmin   = document.getElementById("fc-admin-panel");
       const fcContent = document.getElementById("fc-content");
+      const fcUnlocked = fcContent && !fcContent.classList.contains("hidden");
       if (fcAdmin) {
-        const fcUnlocked = fcContent && !fcContent.classList.contains("hidden");
-        fcAdmin.style.display = (show && fcUnlocked) ? "block" : "none";
+        // hidden クラスで確実に制御（style.display より優先度が明確）
+        if (show && fcUnlocked) {
+          fcAdmin.classList.remove("hidden");
+        } else {
+          fcAdmin.classList.add("hidden");
+        }
       }
       // 管理者用の「直接入場」ボタンをゲート画面に表示/非表示
       const fcAdminEntry = document.getElementById("fc-admin-entry");
-      if (fcAdminEntry) fcAdminEntry.style.display = show ? "flex" : "none";
+      if (fcAdminEntry) {
+        if (show) {
+          fcAdminEntry.classList.remove("hidden");
+        } else {
+          fcAdminEntry.classList.add("hidden");
+        }
+      }
 
       // 掲示板の削除ボタン再描画
       document.querySelectorAll(".bbs-delete-btn").forEach(btn => {
@@ -249,9 +260,9 @@
     function showFanclubGate() {
       document.getElementById("fc-gate")?.classList.remove("hidden");
       document.getElementById("fc-content")?.classList.add("hidden");
-      // 退出時は管理パネルも隠す
+      // 退出時は管理パネルも隠す（hidden クラスで確実に非表示）
       const fcAdmin = document.getElementById("fc-admin-panel");
-      if (fcAdmin) fcAdmin.style.display = "none";
+      if (fcAdmin) fcAdmin.classList.add("hidden");
     }
 
     /* ── 管理者: コード一覧をリアルタイム表示 ── */
@@ -1344,7 +1355,7 @@
         </div>
 
         <!-- 管理者専用: 直接入場ボタン（ブログでログイン済みの場合のみ表示） -->
-        <div id="fc-admin-entry" style="display:none; flex-direction:column; align-items:center; gap:8px; margin-top:8px;">
+        <div id="fc-admin-entry" class="hidden" style="flex-direction:column; align-items:center; gap:8px; margin-top:8px;">
           <div style="font-family:'Share Tech Mono',monospace; font-size:.65rem; color:var(--text-dim); letter-spacing:.1em;">── 管理者専用 ──</div>
           <button class="hud-btn hud-btn-ghost" id="fc-admin-direct-btn">🔑 管理者として入場</button>
         </div>
@@ -1368,7 +1379,7 @@
           </div>
 
           <!-- 管理者パネル（管理者ログイン中のみ表示） -->
-          <div class="fc-admin-panel" id="fc-admin-panel">
+          <div class="fc-admin-panel hidden" id="fc-admin-panel">
             <div class="fc-admin-title">▸ ADMIN: シリアルコード管理</div>
 
             <!-- コード発行フォーム -->
