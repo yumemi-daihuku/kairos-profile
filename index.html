@@ -97,11 +97,7 @@
         // 「管理者ログイン済み」かつ「入場済み」の両方を要求
         fcAdmin.style.display = (show && isFcMember) ? "block" : "none";
       }
-      // 管理者直接入場ボタン: 「管理者ログイン済み」かつ「未入場」の場合のみ表示
-      const fcAdminEntry = document.getElementById("fc-admin-entry");
-      if (fcAdminEntry) {
-        fcAdminEntry.style.display = (show && !isFcMember) ? "flex" : "none";
-      }
+
 
       // 掲示板の削除ボタン再描画
       document.querySelectorAll(".bbs-delete-btn").forEach(btn => {
@@ -198,12 +194,25 @@
     ══════════════════════════════════════════ */
     const fcCodesRef = ref(db, "fanclub/codes");
 
+    // 管理者専用コード（ブログパスワードと同じ kairos_0127）
+    const FC_ADMIN_CODE = "KAIROS_0127";
+
     // コードを照合してファンクラブ入場
     async function verifyFanCode(inputCode) {
       const code = inputCode.trim().toUpperCase();
       if (!code) return { ok: false, msg: "コードを入力してください" };
 
-      // 全コードを取得して照合（コード数は少ないのでクライアント検索で十分）
+      // 管理者コードの場合は即入場（Firebaseを参照しない）
+      if (code === FC_ADMIN_CODE) {
+        isFcMember = true;
+        isAdmin = true;
+        sessionStorage.setItem("kairos_fc_code",  code);
+        sessionStorage.setItem("kairos_fc_label", "ADMIN");
+        sessionStorage.setItem("kairos_admin",    ADMIN_HASH);
+        return { ok: true, label: "ADMIN" };
+      }
+
+      // 一般コードを照合
       const snap = await get(fcCodesRef);
       if (!snap.exists()) return { ok: false, msg: "無効なコードです" };
 
@@ -215,13 +224,11 @@
 
       if (!matched) return { ok: false, msg: "無効なコードです" };
 
-      // 使用記録をFirebaseに保存（usedCountをインクリメント）
-      const memberRef = ref(db, `fanclub/members/${code}`);
+      // 使用記録をFirebaseに保存
       await runTransaction(ref(db, `fanclub/codes/${code}/usedCount`), n => (n || 0) + 1);
-      await set(memberRef, { joinedAt: Date.now(), label: matched.label });
+      await set(ref(db, `fanclub/members/${code}`), { joinedAt: Date.now(), label: matched.label });
 
-      // セッションに保存
-      sessionStorage.setItem("kairos_fc_code", code);
+      sessionStorage.setItem("kairos_fc_code",  code);
       sessionStorage.setItem("kairos_fc_label", matched.label);
       return { ok: true, label: matched.label };
     }
@@ -230,7 +237,12 @@
     function checkFcSession() {
       const code  = sessionStorage.getItem("kairos_fc_code");
       const label = sessionStorage.getItem("kairos_fc_label");
-      if (code) showFanclubContent(label);
+      if (!code) return;
+      // 管理者コードで入場していた場合は isAdmin も復元
+      if (code === "KAIROS_0127") {
+        isAdmin = true;
+      }
+      showFanclubContent(label);
     }
 
     function leaveFanclub() {
@@ -403,10 +415,6 @@
       fcInput?.addEventListener("keydown", e => { if (e.key === "Enter") fcBtn?.click(); });
       document.getElementById("fc-leave-btn")?.addEventListener("click", leaveFanclub);
 
-      // 管理者直接入場ボタン
-      document.getElementById("fc-admin-direct-btn")?.addEventListener("click", () => {
-        showFanclubContent("ADMIN");
-      });
 
       // 管理者: コード発行フォーム
       document.getElementById("fc-issue-btn")?.addEventListener("click", async () => {
@@ -904,15 +912,6 @@
     ══════════════════════════════════════════ */
     .hidden { display: none !important; }
 
-    /* fc-admin-entry: flexレイアウトはCSSで定義（style属性と競合させない） */
-    .fc-admin-entry-wrap {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      margin-top: 8px;
-    }
-    .fc-admin-entry-wrap.hidden { display: none !important; }
     .fc-admin-panel.hidden { display: none !important; }
 
     /* ゲート（コード入力画面） */
@@ -1376,11 +1375,6 @@
           <div class="fc-err" id="fc-enter-err"></div>
         </div>
 
-        <!-- 管理者専用: 直接入場ボタン（ブログでログイン済みの場合のみ表示） -->
-        <div id="fc-admin-entry" class="fc-admin-entry-wrap hidden">
-          <div style="font-family:'Share Tech Mono',monospace; font-size:.65rem; color:var(--text-dim); letter-spacing:.1em;">── 管理者専用 ──</div>
-          <button class="hud-btn hud-btn-ghost" id="fc-admin-direct-btn">🔑 管理者として入場</button>
-        </div>
 
         <!-- ファンクラブコンテンツ（認証済み） -->
         <div id="fc-content" style="display:none;">
