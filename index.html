@@ -125,8 +125,8 @@
               style="display:${isAdmin?"inline-block":"none"}">✕</button>
           </div>
           <div class="post-body">${esc(p.content)}</div>
-          <div class="stamp-bar" data-post="${p.id}">
-            ${stampBarHTML(p.id, stampsData[p.id])}
+          <div class="stamp-bar" data-ns="blog" data-post="${p.id}">
+            ${stampBarHTML("blog", p.id, blogStampsData[p.id])}
           </div>
         </div>`).join("");
       bindDeleteBtns();
@@ -144,54 +144,61 @@
     }
 
 
-    /* ── スタンプ機能 ─────────────────────────────────────────── */
+    /* ── スタンプ機能（ブログ・FC限定ブログ・掲示板 共通）──────── */
     const STAMP_EMOJIS = ["👍","❤️","😂","😮","🎮","✨"];
-    const stampsRef = ref(db, "blog/stamps");
 
-    // スタンプを押す（インクリメント）
-    async function pressStamp(postId, emoji) {
-      const key = encodeEmoji(emoji);
-      await runTransaction(ref(db, `blog/stamps/${postId}/${key}`), n => (n || 0) + 1);
-    }
-
-    // 絵文字をFirebaseキーに変換（特殊文字対策）
+    // 絵文字をFirebaseキーに変換（. # $ [ ] は使用不可）
     function encodeEmoji(emoji) {
       return [...emoji].map(c => c.codePointAt(0).toString(16)).join("_");
     }
 
-    // スタンプバーHTMLを生成
-    function stampBarHTML(postId, stamps) {
+    // namespace = "blog" | "bbs"（Firebase保存先を切り替え）
+    async function pressStamp(namespace, postId, emoji) {
+      const key = encodeEmoji(emoji);
+      await runTransaction(ref(db, `${namespace}/stamps/${postId}/${key}`), n => (n || 0) + 1);
+    }
+
+    // スタンプバーHTMLを生成（data-ns で namespace を持たせる）
+    function stampBarHTML(namespace, postId, stamps) {
       return STAMP_EMOJIS.map(emoji => {
         const key   = encodeEmoji(emoji);
         const count = stamps?.[key] || 0;
-        return `<button class="stamp-btn" data-post="${postId}" data-emoji="${emoji}">
+        return `<button class="stamp-btn" data-ns="${namespace}" data-post="${postId}" data-emoji="${emoji}">
           <span>${emoji}</span>
           <span class="stamp-count">${count > 0 ? count : ""}</span>
         </button>`;
       }).join("");
     }
 
-    // 全投稿のスタンプをリアルタイム購読してレンダリング
-    let stampsData = {}; // キャッシュ
-    onValue(stampsRef, snap => {
-      stampsData = snap.val() || {};
-      // 表示中の全スタンプバーを更新
-      document.querySelectorAll(".stamp-bar").forEach(bar => {
-        const postId = bar.dataset.post;
-        bar.innerHTML = stampBarHTML(postId, stampsData[postId]);
-        bindStampBtns(bar);
-      });
-    });
-
     function bindStampBtns(container) {
       container.querySelectorAll(".stamp-btn").forEach(btn => {
         btn.addEventListener("click", async () => {
           btn.classList.add("pressed");
-          await pressStamp(btn.dataset.post, btn.dataset.emoji);
+          await pressStamp(btn.dataset.ns, btn.dataset.post, btn.dataset.emoji);
           setTimeout(() => btn.classList.remove("pressed"), 600);
         });
       });
     }
+
+    // ── ブログスタンプ購読 ──
+    let blogStampsData = {};
+    onValue(ref(db, "blog/stamps"), snap => {
+      blogStampsData = snap.val() || {};
+      document.querySelectorAll(".stamp-bar[data-ns='blog']").forEach(bar => {
+        bar.innerHTML = stampBarHTML("blog", bar.dataset.post, blogStampsData[bar.dataset.post]);
+        bindStampBtns(bar);
+      });
+    });
+
+    // ── 掲示板スタンプ購読 ──
+    let bbsStampsData = {};
+    onValue(ref(db, "bbs/stamps"), snap => {
+      bbsStampsData = snap.val() || {};
+      document.querySelectorAll(".stamp-bar[data-ns='bbs']").forEach(bar => {
+        bar.innerHTML = stampBarHTML("bbs", bar.dataset.post, bbsStampsData[bar.dataset.post]);
+        bindStampBtns(bar);
+      });
+    });
 
     /* ── 掲示板 (BBS) ────────────────────────── */
     const bbsRef   = ref(db, "bbs/posts");
@@ -216,8 +223,12 @@
               style="display:${isAdmin?"inline-block":"none"}">✕</button>
           </div>
           <div class="post-body">${esc(p.content)}</div>
+          <div class="stamp-bar" data-ns="bbs" data-post="${p.id}">
+            ${stampBarHTML("bbs", p.id, bbsStampsData[p.id])}
+          </div>
         </div>`).join("");
       bindDeleteBtns();
+      document.querySelectorAll(".stamp-bar[data-ns='bbs']").forEach(bar => bindStampBtns(bar));
     });
 
     async function submitBbs(name, content) {
@@ -365,7 +376,11 @@
               <span class="post-time">${formatDate(p.createdAt)}</span>
             </div>
             <div class="post-body">${esc(p.content)}</div>
+            <div class="stamp-bar" data-ns="blog" data-post="${p.id}">
+              ${stampBarHTML("blog", p.id, blogStampsData[p.id])}
+            </div>
           </div>`).join("");
+        list.querySelectorAll(".stamp-bar").forEach(bar => bindStampBtns(bar));
       });
     }
 
