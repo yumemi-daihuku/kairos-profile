@@ -450,8 +450,73 @@
       });
     }
 
+
+    /* ── 右サイドバー: 時計 ────────────────────── */
+    function startClock() {
+      function tick() {
+        const now  = new Date();
+        const pad  = n => String(n).padStart(2, "0");
+        const hms  = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+        const date = `${now.getFullYear()}/${pad(now.getMonth()+1)}/${pad(now.getDate())}`;
+        const days = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+        const clk  = document.getElementById("sidebar-clock");
+        const dt   = document.getElementById("sidebar-date");
+        if (clk) clk.textContent = hms;
+        if (dt)  dt.textContent  = `${date} ${days[now.getDay()]}`;
+      }
+      tick();
+      setInterval(tick, 1000);
+    }
+
+    /* ── 右サイドバー: 最新フィード ────────────── */
+    let sidebarItems = []; // { time, text, type, name? }
+
+    function renderSidebarFeed() {
+      const el = document.getElementById("sidebar-feeds");
+      if (!el) return;
+      // 新しい順にソート、最大15件
+      const sorted = [...sidebarItems].sort((a,b) => b.time - a.time).slice(0, 15);
+      if (!sorted.length) {
+        el.innerHTML = '<div class="sidebar-empty">まだ投稿がありません</div>';
+        return;
+      }
+      el.innerHTML = sorted.map(item => {
+        const badge = item.type === "blog"
+          ? '<span class="sidebar-feed-badge badge-blog">BLOG</span>'
+          : '<span class="sidebar-feed-badge badge-bbs">BBS</span>';
+        const who   = item.name ? `<span style="color:var(--accent2);font-size:.6rem;">${esc(item.name)} </span>` : "";
+        return `<div class="sidebar-feed-item">
+          <div class="sidebar-feed-time">${badge} ${who}${formatDate(item.time)}</div>
+          <div class="sidebar-feed-text">${esc(item.text)}</div>
+        </div>`;
+      }).join("");
+    }
+
+    // ブログ最新をサイドバーに反映
+    onValue(query(postsRef, orderByChild("createdAt"), limitToLast(5)), snap => {
+      // ブログ分を一旦削除して入れ直す
+      sidebarItems = sidebarItems.filter(i => i.type !== "blog");
+      snap.forEach(c => {
+        const v = c.val();
+        if (!v.fcOnly) // FC限定は非表示
+          sidebarItems.push({ time: v.createdAt, text: v.content, type: "blog" });
+      });
+      renderSidebarFeed();
+    });
+
+    // 掲示板最新をサイドバーに反映
+    onValue(query(bbsRef, orderByChild("createdAt"), limitToLast(5)), snap => {
+      sidebarItems = sidebarItems.filter(i => i.type !== "bbs");
+      snap.forEach(c => {
+        const v = c.val();
+        sidebarItems.push({ time: v.createdAt, text: v.content, type: "bbs", name: v.name });
+      });
+      renderSidebarFeed();
+    });
+
     /* ── DOM ready ───────────────────────────── */
     document.addEventListener("DOMContentLoaded", () => {
+      startClock();
       checkSession();
 
       /* ── タブ切り替え ── */
@@ -585,6 +650,7 @@
       --text:      #cce8ff;
       --text-dim:  #4a7a9b;
       --nav-w:     220px;
+      --side-w:    220px;
       --glow:      0 0 20px rgba(0,212,255,.4);
       --glow-warm: 0 0 20px rgba(255,107,53,.5);
     }
@@ -733,6 +799,7 @@
     ══════════════════════════════════════════ */
     .main {
       margin-left: var(--nav-w);
+      margin-right: var(--side-w);
       flex: 1;
       min-height: 100vh;
       position: relative;
@@ -746,6 +813,110 @@
       animation: fadeUp .4s ease both;
     }
     .page-content.active { display: block; }
+
+    /* ── 右サイドバー ── */
+    .right-sidebar {
+      position: fixed;
+      top: 0; right: 0;
+      width: var(--side-w);
+      height: 100vh;
+      background: rgba(5,10,20,.92);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      z-index: 50;
+      backdrop-filter: blur(8px);
+      overflow: hidden;
+    }
+
+    .sidebar-clock-wrap {
+      padding: 24px 16px 16px;
+      border-bottom: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .sidebar-clock {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-shadow: var(--glow);
+      letter-spacing: .08em;
+      line-height: 1;
+    }
+
+    .sidebar-date {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .62rem;
+      color: var(--text-dim);
+      letter-spacing: .1em;
+      margin-top: 6px;
+    }
+
+    .sidebar-feeds {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 0;
+      scrollbar-width: none;
+    }
+    .sidebar-feeds::-webkit-scrollbar { display: none; }
+
+    .sidebar-feed-title {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .6rem;
+      letter-spacing: .15em;
+      color: var(--text-dim);
+      padding: 8px 14px 4px;
+    }
+
+    .sidebar-feed-item {
+      padding: 8px 14px;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+      transition: background .2s;
+      cursor: default;
+    }
+
+    .sidebar-feed-item:hover {
+      background: rgba(0,212,255,.05);
+    }
+
+    .sidebar-feed-time {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .58rem;
+      color: var(--text-dim);
+      margin-bottom: 3px;
+    }
+
+    .sidebar-feed-text {
+      font-size: .78rem;
+      color: var(--text);
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .sidebar-feed-badge {
+      display: inline-block;
+      font-size: .55rem;
+      padding: 1px 5px;
+      border-radius: 3px;
+      margin-bottom: 3px;
+      font-family: 'Share Tech Mono', monospace;
+      letter-spacing: .05em;
+    }
+    .badge-blog  { background: rgba(0,212,255,.15); color: var(--accent); }
+    .badge-bbs   { background: rgba(255,107,53,.15); color: var(--accent2); }
+
+    .sidebar-empty {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .65rem;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 16px;
+      letter-spacing: .08em;
+    }
 
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(16px); }
@@ -1372,7 +1543,8 @@
       .nav-tab { justify-content:center; padding:16px; }
       .nav-tab-icon { width:auto; font-size:1.2rem; }
 
-      .main { margin-left:60px; }
+      .main { margin-left:60px; margin-right:0; }
+      .right-sidebar { display:none; }
       .page-content { padding:24px 16px 60px; }
 
       .hero-inner { flex-direction:column; text-align:center; }
@@ -1786,5 +1958,20 @@
     </div>
 
   </main>
+
+  <!-- ══ 右サイドバー（全タブ共通） ══ -->
+  <aside class="right-sidebar">
+    <!-- 時計 -->
+    <div class="sidebar-clock-wrap">
+      <div class="sidebar-clock" id="sidebar-clock">00:00:00</div>
+      <div class="sidebar-date"  id="sidebar-date">----/--/--</div>
+    </div>
+
+    <!-- 最新フィード -->
+    <div class="sidebar-feeds" id="sidebar-feeds">
+      <div class="sidebar-empty">読み込み中...</div>
+    </div>
+  </aside>
+
 </body>
 </html>
