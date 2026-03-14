@@ -90,18 +90,8 @@
       if (bLogin)  bLogin.style.display  = show ? "none"  : "flex";
       if (bLogout) bLogout.style.display = show ? "inline-flex" : "none";
 
-      // ファンクラブ管理パネル:
-      // 「管理者ログイン済み」かつ「入場済み」の両方を要求
-      const fcAdmin = document.getElementById("fc-admin-panel");
-      if (fcAdmin) {
-        const showPanel = show && isFcMember;
-        fcAdmin.style.display = showPanel ? "block" : "none";
-        if (showPanel) startFcAdminWatch();
-        else stopFcAdminWatch();
-      } else if (show && isFcMember) {
-        // fcAdminがまだ取得できない場合も購読だけ開始しておく
-        startFcAdminWatch();
-      }
+      // ファンクラブ管理パネル
+      applyAdminPanel();
 
 
       // 掲示板の削除ボタン再描画
@@ -266,20 +256,21 @@
       if (content) content.style.display = "block";
       if (lbl)     lbl.textContent       = label;
 
-      // 管理パネル: display:block にした直後に確実に取得できるよう
-      // requestAnimationFrame で1フレーム待ってから操作する
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const fcAdmin = document.getElementById("fc-admin-panel");
-          if (!fcAdmin) return;
-          if (isAdmin) {
-            fcAdmin.style.display = "block";
-            startFcAdminWatch();
-          } else {
-            fcAdmin.style.display = "none";
-          }
-        });
-      });
+      // 管理パネルの表示（isAdminは呼び出し前に必ずセット済み）
+      applyAdminPanel();
+    }
+
+    // 管理パネルの表示状態を単純に適用する
+    function applyAdminPanel() {
+      const fcAdmin = document.getElementById("fc-admin-panel");
+      if (!fcAdmin) return;
+      if (isAdmin && isFcMember) {
+        fcAdmin.style.cssText = "display:block !important";
+        startFcAdminWatch();
+      } else {
+        fcAdmin.style.cssText = "display:none !important";
+        stopFcAdminWatch();
+      }
     }
 
     function showFanclubGate() {
@@ -289,14 +280,12 @@
       const gate = document.getElementById("fc-gate");
       if (gate) gate.style.display = "";
 
-      // コンテンツ・管理パネルを非表示
+      // コンテンツを非表示
       const content = document.getElementById("fc-content");
       if (content) content.style.display = "none";
-      const fcAdmin = document.getElementById("fc-admin-panel");
-      if (fcAdmin) fcAdmin.style.display = "none";
 
-      // 管理者入場ボタンの状態を再評価
-      refreshAdminUI();
+      // 管理パネルを隠す
+      applyAdminPanel();
     }
 
     /* ── 管理者: コード一覧購読（管理パネル表示時に startFcAdminWatch() で開始） ── */
@@ -1418,7 +1407,7 @@
           </div>
 
           <!-- 管理者パネル（管理者ログイン中のみ表示） -->
-          <div class="fc-admin-panel hidden" id="fc-admin-panel">
+          <div class="fc-admin-panel" id="fc-admin-panel" style="display:none">
             <div class="fc-admin-title">▸ ADMIN: シリアルコード管理</div>
 
             <!-- コード発行フォーム -->
