@@ -91,11 +91,17 @@
       if (bLogout) bLogout.style.display = show ? "inline-flex" : "none";
 
       // ファンクラブ管理パネル:
-      // isFcMember フラグで入場済みかを明確に判定
+      // 「管理者ログイン済み」かつ「入場済み」の両方を要求
       const fcAdmin = document.getElementById("fc-admin-panel");
       if (fcAdmin) {
-        // 「管理者ログイン済み」かつ「入場済み」の両方を要求
-        fcAdmin.style.display = (show && isFcMember) ? "block" : "none";
+        const showPanel = show && isFcMember;
+        fcAdmin.style.display = showPanel ? "block" : "none";
+        // パネル表示時にFirebase購読を開始、非表示時は停止
+        if (showPanel) {
+          startFcAdminWatch();
+        } else {
+          stopFcAdminWatch();
+        }
       }
 
 
@@ -288,10 +294,12 @@
       refreshAdminUI();
     }
 
-    /* ── 管理者: コード一覧をリアルタイム表示 ── */
-    onValue(fcCodesRef, snap => {
+    /* ── 管理者: コード一覧購読（管理パネル表示時に startFcAdminWatch() で開始） ── */
+    let fcAdminUnsubscribe = null; // 購読解除用関数
+
+    function renderFcCodeList(snap) {
       const list = document.getElementById("fc-admin-code-list");
-      if (!list || !isAdmin) return;
+      if (!list) return;
       const codes = [];
       snap.forEach(c => codes.push({ id: c.key, ...c.val() }));
       if (!codes.length) {
@@ -310,8 +318,6 @@
           <button class="fc-delete-code-btn bbs-delete-btn" data-id="${c.id}">✕</button>
         </div>
       `).join("");
-
-      // イベント登録
       list.querySelectorAll(".fc-toggle-btn").forEach(btn => {
         btn.onclick = async () => {
           const active = btn.dataset.active === "true";
@@ -324,7 +330,17 @@
           await remove(ref(db, `fanclub/codes/${btn.dataset.id}`));
         };
       });
-    });
+    }
+
+    // 管理パネル表示時に呼ぶ — 重複購読を防ぐため既存購読を先に解除
+    function startFcAdminWatch() {
+      if (fcAdminUnsubscribe) fcAdminUnsubscribe();
+      fcAdminUnsubscribe = onValue(fcCodesRef, renderFcCodeList);
+    }
+
+    function stopFcAdminWatch() {
+      if (fcAdminUnsubscribe) { fcAdminUnsubscribe(); fcAdminUnsubscribe = null; }
+    }
 
     /* ── 管理者: コード発行 ── */
     async function issueCode(codeId, label) {
