@@ -256,25 +256,30 @@
     }
 
     function showFanclubContent(label) {
-      isFcMember = true; // 入場済みフラグをセット
+      isFcMember = true;
 
-      // ゲートを非表示
-      const gate = document.getElementById("fc-gate");
-      if (gate) gate.style.display = "none";
-
-      // コンテンツを表示
+      // ゲートを非表示・コンテンツを表示
+      const gate    = document.getElementById("fc-gate");
       const content = document.getElementById("fc-content");
+      const lbl     = document.getElementById("fc-member-label");
+      if (gate)    gate.style.display    = "none";
       if (content) content.style.display = "block";
+      if (lbl)     lbl.textContent       = label;
 
-      const lbl = document.getElementById("fc-member-label");
-      if (lbl) lbl.textContent = label;
-
-      // 管理パネルを表示（isAdminフラグは呼び出し前にセット済み）
-      const fcAdmin = document.getElementById("fc-admin-panel");
-      if (fcAdmin) {
-        fcAdmin.style.display = isAdmin ? "block" : "none";
-        if (isAdmin) startFcAdminWatch();
-      }
+      // 管理パネル: display:block にした直後に確実に取得できるよう
+      // requestAnimationFrame で1フレーム待ってから操作する
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const fcAdmin = document.getElementById("fc-admin-panel");
+          if (!fcAdmin) return;
+          if (isAdmin) {
+            fcAdmin.style.display = "block";
+            startFcAdminWatch();
+          } else {
+            fcAdmin.style.display = "none";
+          }
+        });
+      });
     }
 
     function showFanclubGate() {
