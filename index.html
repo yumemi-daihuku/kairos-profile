@@ -309,7 +309,7 @@
             data-id="${c.id}" data-active="${c.active}">
             ${c.active ? "⏸ 無効化" : "▶ 有効化"}
           </button>
-          <button class="fc-delete-code-btn bbs-delete-btn" data-id="${c.id}">✕</button>
+          <button class="fc-del-btn" data-id="${c.id}">✕</button>
         </div>
       `).join("");
       list.querySelectorAll(".fc-toggle-btn").forEach(btn => {
@@ -318,7 +318,7 @@
           await set(ref(db, `fanclub/codes/${btn.dataset.id}/active`), !active);
         };
       });
-      list.querySelectorAll(".fc-delete-code-btn").forEach(btn => {
+      list.querySelectorAll(".fc-del-btn").forEach(btn => {
         btn.onclick = async () => {
           if (!confirm(`コード "${btn.dataset.id}" を削除しますか？`)) return;
           await remove(ref(db, `fanclub/codes/${btn.dataset.id}`));
@@ -442,6 +442,8 @@
           const lbEl = document.getElementById("fc-new-code-label");
           if (idEl) idEl.value = "";
           if (lbEl) lbEl.value = "";
+          // 発行後に購読を再起動して一覧を確実に更新
+          startFcAdminWatch();
         }
       });
 
@@ -823,6 +825,12 @@
       transition:color .2s, background .2s;
     }
     .bbs-delete-btn:hover { color:var(--accent2); background:rgba(255,107,53,.1); }
+    .fc-del-btn {
+      background:none; border:none; color:var(--text-dim); cursor:pointer;
+      font-size:.72rem; padding:2px 5px; border-radius:2px;
+      transition:color .2s, background .2s;
+    }
+    .fc-del-btn:hover { color:var(--accent2); background:rgba(255,107,53,.1); }
 
     .empty-msg {
       text-align:center; color:var(--text-dim);
