@@ -49,7 +49,8 @@
 
     /* ── 認証ユーティリティ ──────────────────── */
     const ADMIN_HASH = "6e7802730cdefeb72f8e03a8a49b7b3c90c5d6542e7cbda02d0c05a55489eee6";
-    let isAdmin = false;
+    let isAdmin   = false;
+    let isFcMember = false; // ファンクラブ入場済みフラグ
 
     async function hashPassword(pw) {
       const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(pw));
@@ -90,22 +91,16 @@
       if (bLogout) bLogout.style.display = show ? "inline-flex" : "none";
 
       // ファンクラブ管理パネル:
-      // 「管理者ログイン済み」かつ「fc-contentが表示中（入場済み）」の両方を要求
-      const fcAdmin   = document.getElementById("fc-admin-panel");
-      const fcContent = document.getElementById("fc-content");
-      // style.displayで判定（showFanclubContentがstyleで制御しているため）
-      const fcUnlocked = fcContent &&
-        fcContent.style.display !== "none" &&
-        fcContent.style.display !== "";
+      // isFcMember フラグで入場済みかを明確に判定
+      const fcAdmin = document.getElementById("fc-admin-panel");
       if (fcAdmin) {
-        fcAdmin.style.display = (show && fcUnlocked) ? "block" : "none";
+        // 「管理者ログイン済み」かつ「入場済み」の両方を要求
+        fcAdmin.style.display = (show && isFcMember) ? "block" : "none";
       }
-      // 管理者用「直接入場」ボタン: 管理者かつゲートが表示中の時だけ出す
+      // 管理者直接入場ボタン: 「管理者ログイン済み」かつ「未入場」の場合のみ表示
       const fcAdminEntry = document.getElementById("fc-admin-entry");
-      const fcGate = document.getElementById("fc-gate");
-      const gateVisible = fcGate && fcGate.style.display !== "none";
       if (fcAdminEntry) {
-        fcAdminEntry.style.display = (show && gateVisible !== false) ? "flex" : "none";
+        fcAdminEntry.style.display = (show && !isFcMember) ? "flex" : "none";
       }
 
       // 掲示板の削除ボタン再描画
@@ -245,7 +240,9 @@
     }
 
     function showFanclubContent(label) {
-      // ゲート関連を全て非表示
+      isFcMember = true; // 入場済みフラグをセット
+
+      // ゲート・入場ボタンを非表示
       const gate  = document.getElementById("fc-gate");
       const entry = document.getElementById("fc-admin-entry");
       if (gate)  gate.style.display  = "none";
@@ -263,16 +260,15 @@
     }
 
     function showFanclubGate() {
+      isFcMember = false; // 入場済みフラグをリセット
+
       // ゲートを再表示
       const gate = document.getElementById("fc-gate");
       if (gate) gate.style.display = "";
 
-      // 管理者入場ボタンは refreshAdminUI に委ねる（管理者ならまた表示される）
-      // コンテンツを非表示
+      // コンテンツ・管理パネルを非表示
       const content = document.getElementById("fc-content");
       if (content) content.style.display = "none";
-
-      // 管理パネルを隠す
       const fcAdmin = document.getElementById("fc-admin-panel");
       if (fcAdmin) fcAdmin.style.display = "none";
 
