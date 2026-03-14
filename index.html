@@ -182,174 +182,154 @@
 
 
     /* ══════════════════════════════════════════
-       ファンクラブ — シリアルコード制
-       Firebase構造:
-         fanclub/codes/{codeId}: { label, active, usedCount, createdAt }
-         fanclub/members/{codeId}: { joinedAt }  ← 使用済みコード記録
+       ファンクラブ — シリアルコード制 (v3)
+       入場: Firebase上の有効なシリアルコード
+       管理: 入場後にパスワード「KAIROS_0127」を入力
     ══════════════════════════════════════════ */
     const fcCodesRef = ref(db, "fanclub/codes");
+    let fcAdminUnsubscribe = null;
+    let isFcAdmin = false;
 
-    // 管理者専用コード（ブログパスワードと同じ kairos_0127）
-    const FC_ADMIN_CODE = "KAIROS_0127";
-
-    // コードを照合してファンクラブ入場
-    // 戻り値: { ok, label, isAdminCode }
+    // ── 入場照合 ─────────────────────────────
     async function verifyFanCode(inputCode) {
       const code = inputCode.trim().toUpperCase();
       if (!code) return { ok: false, msg: "コードを入力してください" };
-
-      // 管理者コードの場合は即通過（フラグ操作は呼び出し元で行う）
-      if (code === FC_ADMIN_CODE) {
-        sessionStorage.setItem("kairos_fc_code",  code);
-        sessionStorage.setItem("kairos_fc_label", "ADMIN");
-        sessionStorage.setItem("kairos_admin",    ADMIN_HASH);
-        return { ok: true, label: "ADMIN", isAdminCode: true };
-      }
-
-      // 一般コードを照合
       const snap = await get(fcCodesRef);
       if (!snap.exists()) return { ok: false, msg: "無効なコードです" };
-
       let matched = null;
       snap.forEach(child => {
-        const d = child.val();
-        if (d.active && child.key === code) matched = { id: child.key, ...d };
+        if (child.val().active && child.key === code)
+          matched = { id: child.key, ...child.val() };
       });
-
       if (!matched) return { ok: false, msg: "無効なコードです" };
-
-      // 使用記録をFirebaseに保存
-      await runTransaction(ref(db, `fanclub/codes/${code}/usedCount`), n => (n || 0) + 1);
+      await runTransaction(ref(db, `fanclub/codes/${code}/usedCount`), n => (n||0)+1);
       await set(ref(db, `fanclub/members/${code}`), { joinedAt: Date.now(), label: matched.label });
-
       sessionStorage.setItem("kairos_fc_code",  code);
       sessionStorage.setItem("kairos_fc_label", matched.label);
-      return { ok: true, label: matched.label, isAdminCode: false };
+      return { ok: true, label: matched.label };
     }
 
-    // ファンクラブセッション確認
+    // ── セッション復元 ────────────────────────
     function checkFcSession() {
       const code  = sessionStorage.getItem("kairos_fc_code");
       const label = sessionStorage.getItem("kairos_fc_label");
-      if (!code) return;
-      // 管理者コードで入場していた場合は isAdmin も復元
-      if (code === "KAIROS_0127") {
-        isAdmin = true;
+      if (code) {
+        enterFanclub(label);
+        if (isFcAdmin) showFcAdminPanel();
       }
-      showFanclubContent(label);
+    }
+
+    function checkFcAdminSession() {
+      if (sessionStorage.getItem("kairos_fc_admin") === ADMIN_HASH) {
+        isFcAdmin = true;
+      }
+    }
+
+    // ── 入場・退出 ────────────────────────────
+    function enterFanclub(label) {
+      isFcMember = true;
+      document.getElementById("fc-gate").style.display    = "none";
+      document.getElementById("fc-content").style.display = "block";
+      document.getElementById("fc-member-label").textContent = label;
+      document.getElementById("fc-admin-panel").style.cssText = "display:none!important";
+      document.getElementById("fc-mgr-login").style.display  = "flex";
+      document.getElementById("fc-mgr-logout").style.display = "none";
     }
 
     function leaveFanclub() {
+      isFcMember = false;
+      isFcAdmin  = false;
       sessionStorage.removeItem("kairos_fc_code");
       sessionStorage.removeItem("kairos_fc_label");
-      showFanclubGate();
+      sessionStorage.removeItem("kairos_fc_admin");
+      document.getElementById("fc-gate").style.display    = "";
+      document.getElementById("fc-content").style.display = "none";
+      stopFcAdminWatch();
     }
 
-    function showFanclubContent(label) {
-      isFcMember = true;
-
-      // ゲートを非表示・コンテンツを表示
-      const gate    = document.getElementById("fc-gate");
-      const content = document.getElementById("fc-content");
-      const lbl     = document.getElementById("fc-member-label");
-      if (gate)    gate.style.display    = "none";
-      if (content) content.style.display = "block";
-      if (lbl)     lbl.textContent       = label;
-
-      // 管理パネルの表示（isAdminは呼び出し前に必ずセット済み）
-      applyAdminPanel();
+    // ── ファンクラブ内管理者ログイン ──────────
+    async function fcAdminLogin(pw) {
+      const h = await hashPassword(pw);
+      if (h !== ADMIN_HASH) return false;
+      isFcAdmin = true;
+      sessionStorage.setItem("kairos_fc_admin", ADMIN_HASH);
+      showFcAdminPanel();
+      return true;
     }
 
-    // 管理パネルの表示状態を単純に適用する
-    function applyAdminPanel() {
-      const fcAdmin = document.getElementById("fc-admin-panel");
-      if (!fcAdmin) return;
-      if (isAdmin && isFcMember) {
-        fcAdmin.style.cssText = "display:block !important";
-        startFcAdminWatch();
-      } else {
-        fcAdmin.style.cssText = "display:none !important";
-        stopFcAdminWatch();
-      }
+    function fcAdminLogout() {
+      isFcAdmin = false;
+      sessionStorage.removeItem("kairos_fc_admin");
+      hideFcAdminPanel();
     }
 
-    function showFanclubGate() {
-      isFcMember = false; // 入場済みフラグをリセット
-
-      // ゲートを再表示
-      const gate = document.getElementById("fc-gate");
-      if (gate) gate.style.display = "";
-
-      // コンテンツを非表示
-      const content = document.getElementById("fc-content");
-      if (content) content.style.display = "none";
-
-      // 管理パネルを隠す
-      applyAdminPanel();
+    function showFcAdminPanel() {
+      document.getElementById("fc-admin-panel").style.cssText = "display:block!important";
+      document.getElementById("fc-mgr-login").style.display  = "none";
+      document.getElementById("fc-mgr-logout").style.display = "inline-flex";
+      startFcAdminWatch();
     }
 
-    /* ── 管理者: コード一覧購読（管理パネル表示時に startFcAdminWatch() で開始） ── */
-    let fcAdminUnsubscribe = null; // 購読解除用関数
-
-    function renderFcCodeList(snap) {
-      const list = document.getElementById("fc-admin-code-list");
-      if (!list) return;
-      const codes = [];
-      snap.forEach(c => codes.push({ id: c.key, ...c.val() }));
-      if (!codes.length) {
-        list.innerHTML = '<div class="empty-msg">コードがまだありません</div>';
-        return;
-      }
-      list.innerHTML = codes.map(c => `
-        <div class="fc-code-row ${c.active ? "" : "inactive"}">
-          <span class="fc-code-id">${esc(c.id)}</span>
-          <span class="fc-code-label">${esc(c.label || "")}</span>
-          <span class="fc-code-used">使用: ${c.usedCount || 0}回</span>
-          <button class="fc-toggle-btn hud-btn hud-btn-ghost"
-            data-id="${c.id}" data-active="${c.active}">
-            ${c.active ? "⏸ 無効化" : "▶ 有効化"}
-          </button>
-          <button class="fc-del-btn" data-id="${c.id}">✕</button>
-        </div>
-      `).join("");
-      list.querySelectorAll(".fc-toggle-btn").forEach(btn => {
-        btn.onclick = async () => {
-          const active = btn.dataset.active === "true";
-          await set(ref(db, `fanclub/codes/${btn.dataset.id}/active`), !active);
-        };
-      });
-      list.querySelectorAll(".fc-del-btn").forEach(btn => {
-        btn.onclick = async () => {
-          if (!confirm(`コード "${btn.dataset.id}" を削除しますか？`)) return;
-          await remove(ref(db, `fanclub/codes/${btn.dataset.id}`));
-        };
-      });
+    function hideFcAdminPanel() {
+      document.getElementById("fc-admin-panel").style.cssText = "display:none!important";
+      document.getElementById("fc-mgr-login").style.display  = "flex";
+      document.getElementById("fc-mgr-logout").style.display = "none";
+      stopFcAdminWatch();
     }
 
-    // 管理パネル表示時に呼ぶ — 重複購読を防ぐため既存購読を先に解除
+    // ── コード一覧購読 ────────────────────────
     function startFcAdminWatch() {
       if (fcAdminUnsubscribe) fcAdminUnsubscribe();
-      fcAdminUnsubscribe = onValue(fcCodesRef, renderFcCodeList);
+      fcAdminUnsubscribe = onValue(fcCodesRef, snap => {
+        const list = document.getElementById("fc-admin-code-list");
+        if (!list) return;
+        const codes = [];
+        snap.forEach(c => codes.push({ id: c.key, ...c.val() }));
+        if (!codes.length) {
+          list.innerHTML = '<div class="empty-msg">コードがまだありません</div>';
+          return;
+        }
+        list.innerHTML = codes.map(c => `
+          <div class="fc-code-row ${c.active ? "" : "inactive"}">
+            <span class="fc-code-id">${esc(c.id)}</span>
+            <span class="fc-code-label">${esc(c.label||"")}</span>
+            <span class="fc-code-used">使用: ${c.usedCount||0}回</span>
+            <button class="fc-toggle-btn hud-btn hud-btn-ghost"
+              data-id="${c.id}" data-active="${c.active}">
+              ${c.active ? "⏸ 無効化" : "▶ 有効化"}
+            </button>
+            <button class="fc-del-btn" data-id="${c.id}">✕</button>
+          </div>`).join("");
+        list.querySelectorAll(".fc-toggle-btn").forEach(btn => {
+          btn.onclick = async () => {
+            const active = btn.dataset.active === "true";
+            await set(ref(db, `fanclub/codes/${btn.dataset.id}/active`), !active);
+          };
+        });
+        list.querySelectorAll(".fc-del-btn").forEach(btn => {
+          btn.onclick = async () => {
+            if (!confirm(`コード "${btn.dataset.id}" を削除しますか？`)) return;
+            await remove(ref(db, `fanclub/codes/${btn.dataset.id}`));
+          };
+        });
+      });
     }
 
     function stopFcAdminWatch() {
       if (fcAdminUnsubscribe) { fcAdminUnsubscribe(); fcAdminUnsubscribe = null; }
     }
 
-    /* ── 管理者: コード発行 ── */
+    // ── コード発行 ────────────────────────────
     async function issueCode(codeId, label) {
       const id = codeId.trim().toUpperCase();
       if (!id) return "IDを入力してください";
-      if (!/^[A-Z0-9\-_]{3,20}$/.test(id)) return "3〜20文字の英数字・ハイフン・アンダースコアで入力してください";
+      if (!/^[A-Z0-9_-]{3,20}$/.test(id))
+        return "3〜20文字の英数字・ハイフン・アンダースコアで入力してください";
       await set(ref(db, `fanclub/codes/${id}`), {
-        label:     label.trim() || id,
-        active:    true,
-        usedCount: 0,
-        createdAt: Date.now()
+        label: label.trim() || id, active: true, usedCount: 0, createdAt: Date.now()
       });
-      return null; // エラーなし
+      return null;
     }
-
     function bindDeleteBtns() {
       document.querySelectorAll(".bbs-delete-btn").forEach(btn => {
         btn.onclick = async () => {
@@ -405,20 +385,19 @@
 
 
       /* ── ファンクラブ ── */
+      checkFcAdminSession();
       checkFcSession();
 
-      // コード入力・認証
+      // シリアルコード入場
       const fcInput = document.getElementById("fc-code-input");
       const fcBtn   = document.getElementById("fc-enter-btn");
       const fcErr   = document.getElementById("fc-enter-err");
-
       fcBtn?.addEventListener("click", async () => {
         fcBtn.disabled = true; fcBtn.textContent = "確認中...";
         const result = await verifyFanCode(fcInput?.value || "");
         if (result.ok) {
-          // 管理者コードなら先にフラグをセット
-          if (result.isAdminCode) isAdmin = true;
-          showFanclubContent(result.label);
+          enterFanclub(result.label);
+          if (isFcAdmin) showFcAdminPanel();
         } else {
           if (fcErr) fcErr.textContent = result.msg;
           fcBtn.disabled = false; fcBtn.textContent = "入場する ▶";
@@ -427,8 +406,25 @@
       fcInput?.addEventListener("keydown", e => { if (e.key === "Enter") fcBtn?.click(); });
       document.getElementById("fc-leave-btn")?.addEventListener("click", leaveFanclub);
 
+      // 管理者パスワード認証
+      const mgrPw  = document.getElementById("fc-mgr-pw");
+      const mgrBtn = document.getElementById("fc-mgr-login-btn");
+      const mgrErr = document.getElementById("fc-mgr-err");
+      mgrBtn?.addEventListener("click", async () => {
+        mgrBtn.disabled = true; mgrBtn.textContent = "確認中...";
+        const ok = await fcAdminLogin(mgrPw?.value || "");
+        if (!ok) {
+          if (mgrErr) mgrErr.textContent = "パスワードが違います";
+          if (mgrPw) mgrPw.value = "";
+        } else {
+          if (mgrErr) mgrErr.textContent = "";
+        }
+        mgrBtn.disabled = false; mgrBtn.textContent = "認証 ▶";
+      });
+      mgrPw?.addEventListener("keydown", e => { if (e.key === "Enter") mgrBtn?.click(); });
+      document.getElementById("fc-mgr-logout")?.addEventListener("click", fcAdminLogout);
 
-      // 管理者: コード発行フォーム
+      // コード発行
       document.getElementById("fc-issue-btn")?.addEventListener("click", async () => {
         const codeId = document.getElementById("fc-new-code-id")?.value || "";
         const label  = document.getElementById("fc-new-code-label")?.value || "";
@@ -442,10 +438,10 @@
           const lbEl = document.getElementById("fc-new-code-label");
           if (idEl) idEl.value = "";
           if (lbEl) lbEl.value = "";
-          // 発行後に購読を再起動して一覧を確実に更新
-          startFcAdminWatch();
         }
       });
+
+   
 
       /* ── 掲示板投稿 ── */
       const bbsName = document.getElementById("bbs-name");
@@ -1373,7 +1369,7 @@
       <div class="card accent3">
         <div class="section-title purple">🎫 KAIROS FANCLUB</div>
 
-        <!-- ゲート（未認証） -->
+        <!-- ゲート（未入場） -->
         <div class="fc-gate" id="fc-gate">
           <div class="fc-gate-icon">🔐</div>
           <div class="fc-gate-title">MEMBERS ONLY</div>
@@ -1382,22 +1378,16 @@
             シリアルコードをお持ちの方のみ入場できます。
           </div>
           <div class="fc-gate-form">
-            <input
-              type="text"
-              id="fc-code-input"
-              class="hud-input fc-code-input"
-              placeholder="シリアルコードを入力"
-              maxlength="20"
-              autocomplete="off"
-            />
+            <input type="text" id="fc-code-input" class="hud-input fc-code-input"
+              placeholder="シリアルコードを入力" maxlength="20" autocomplete="off" />
             <button class="hud-btn hud-btn-purple" id="fc-enter-btn">入場する ▶</button>
           </div>
           <div class="fc-err" id="fc-enter-err"></div>
         </div>
 
-
-        <!-- ファンクラブコンテンツ（認証済み） -->
+        <!-- コンテンツ（入場済み） -->
         <div id="fc-content" style="display:none;">
+
           <div class="fc-content-header">
             <div>
               <div class="fc-welcome">WELCOME TO KAIROS FANCLUB</div>
@@ -1406,38 +1396,45 @@
             <button class="hud-btn hud-btn-ghost" id="fc-leave-btn">⏏ 退出</button>
           </div>
 
-          <!-- コンテンツ本体（後から自由に追加できる枠） -->
           <div class="fc-content-placeholder">
-            🚧 CONTENT COMING SOON 🚧<br>
-            <br>
+            🚧 CONTENT COMING SOON 🚧<br><br>
             ここにファンクラブ限定コンテンツが<br>
             追加されていく予定です。お楽しみに！
           </div>
 
-          <!-- 管理者パネル（管理者ログイン中のみ表示） -->
-          <div class="fc-admin-panel" id="fc-admin-panel" style="display:none">
+          <!-- 管理者パネル（パスワード認証後のみ） -->
+          <div class="fc-admin-panel" id="fc-admin-panel" style="display:none!important">
             <div class="fc-admin-title">▸ ADMIN: シリアルコード管理</div>
-
-            <!-- コード発行フォーム -->
             <div class="fc-issue-form">
               <input type="text" id="fc-new-code-id" class="hud-input"
                 placeholder="コードID (例: FRIEND-001)" maxlength="20"
-                style="min-width:160px; text-transform:uppercase; letter-spacing:.1em;" />
+                style="min-width:160px;text-transform:uppercase;letter-spacing:.1em;" />
               <input type="text" id="fc-new-code-label" class="hud-input"
-                placeholder="メモ (例: ○○さん用)" maxlength="30"
-                style="min-width:140px;" />
+                placeholder="メモ (例: ○○さん用)" maxlength="30" style="min-width:140px;" />
               <button class="hud-btn hud-btn-purple" id="fc-issue-btn">発行 ▶</button>
               <div class="fc-issue-err" id="fc-issue-err"></div>
             </div>
-
-            <!-- コード一覧 -->
             <div id="fc-admin-code-list">
               <div class="empty-msg">読み込み中...</div>
             </div>
           </div>
+
+          <!-- 管理者ログインフォーム -->
+          <div id="fc-mgr-login" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+            <span style="font-family:'Share Tech Mono',monospace;font-size:.68rem;color:var(--text-dim);letter-spacing:.1em;">ADMIN_ACCESS:</span>
+            <input type="password" id="fc-mgr-pw" class="hud-input"
+              placeholder="管理者パスワード" maxlength="64" style="flex:1;min-width:160px;" />
+            <button class="hud-btn hud-btn-purple" id="fc-mgr-login-btn">認証 ▶</button>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:.7rem;color:var(--accent2);width:100%;min-height:1em;" id="fc-mgr-err"></div>
+          </div>
+
+          <!-- 管理者ログアウト -->
+          <button class="hud-btn hud-btn-ghost" id="fc-mgr-logout"
+            style="display:none;margin-top:12px;">⏏ 管理者ログアウト</button>
+
         </div>
 
-      </div>
+      </div>    </div>
     </div>
 
   </main>
