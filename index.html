@@ -110,13 +110,16 @@
       const posts = [];
       snap.forEach(c => posts.push({ id: c.key, ...c.val() }));
       posts.reverse();
-      if (!posts.length) {
+      // ファンクラブ限定投稿はisFcMember=trueの場合のみ表示
+      const visible = posts.filter(p => !p.fcOnly || isFcMember);
+      if (!visible.length) {
         list.innerHTML = '<div class="empty-msg">まだ投稿がありません</div>';
         return;
       }
-      list.innerHTML = posts.map(p => `
-        <div class="post-card">
+      list.innerHTML = visible.map(p => `
+        <div class="post-card${p.fcOnly ? " fc-post" : ""}">
           <div class="post-meta">
+            ${p.fcOnly ? '<span class="fc-post-badge">🎫 FC限定</span>' : ''}
             <span class="post-time">${formatDate(p.createdAt)}</span>
             <button class="bbs-delete-btn" data-path="blog/posts/${p.id}"
               style="display:${isAdmin?"inline-block":"none"}">✕</button>
@@ -126,9 +129,13 @@
       bindDeleteBtns();
     });
 
-    async function submitPost(content) {
+    async function submitPost(content, fcOnly) {
       if (!content.trim() || !isAdmin) return;
-      await push(postsRef, { content: content.trim(), createdAt: Date.now() });
+      await push(postsRef, {
+        content:   content.trim(),
+        fcOnly:    fcOnly === true,
+        createdAt: Date.now()
+      });
     }
 
     /* ── 掲示板 (BBS) ────────────────────────── */
@@ -234,6 +241,8 @@
       document.getElementById("fc-admin-panel").style.cssText = "display:none!important";
       document.getElementById("fc-mgr-login").style.display  = "flex";
       document.getElementById("fc-mgr-logout").style.display = "none";
+      // FC限定ブログの購読開始
+      startFcBlogWatch();
     }
 
     function leaveFanclub() {
@@ -245,6 +254,7 @@
       document.getElementById("fc-gate").style.display    = "";
       document.getElementById("fc-content").style.display = "none";
       stopFcAdminWatch();
+      stopFcBlogWatch();
     }
 
     // ── ファンクラブ内管理者ログイン ──────────
@@ -275,6 +285,37 @@
       document.getElementById("fc-mgr-login").style.display  = "flex";
       document.getElementById("fc-mgr-logout").style.display = "none";
       stopFcAdminWatch();
+    }
+
+    // ── FC限定ブログ購読 ──────────────────────
+    const fcBlogQuery = query(postsRef, orderByChild("createdAt"), limitToLast(20));
+    let fcBlogUnsubscribe = null;
+
+    function startFcBlogWatch() {
+      if (fcBlogUnsubscribe) return; // 重複購読防止
+      fcBlogUnsubscribe = onValue(fcBlogQuery, snap => {
+        const list = document.getElementById("fc-blog-list");
+        if (!list) return;
+        const posts = [];
+        snap.forEach(c => { if (c.val().fcOnly) posts.push({ id: c.key, ...c.val() }); });
+        posts.reverse();
+        if (!posts.length) {
+          list.innerHTML = '<div class="empty-msg">FC限定投稿はまだありません</div>';
+          return;
+        }
+        list.innerHTML = posts.map(p => `
+          <div class="post-card">
+            <div class="post-meta">
+              <span class="fc-post-badge">🎫 FC限定</span>
+              <span class="post-time">${formatDate(p.createdAt)}</span>
+            </div>
+            <div class="post-body">${esc(p.content)}</div>
+          </div>`).join("");
+      });
+    }
+
+    function stopFcBlogWatch() {
+      if (fcBlogUnsubscribe) { fcBlogUnsubscribe(); fcBlogUnsubscribe = null; }
     }
 
     // ── コード一覧購読 ────────────────────────
@@ -378,8 +419,10 @@
       });
       blogSub?.addEventListener("click", async () => {
         blogSub.disabled = true; blogSub.textContent = "送信中...";
-        await submitPost(blogTa.value);
+        const fcCheck = document.getElementById("blog-fc-only");
+        await submitPost(blogTa.value, fcCheck?.checked === true);
         blogTa.value = ""; if (blogCnt) blogCnt.textContent = "0 / 140";
+        if (fcCheck) fcCheck.checked = false;
         blogSub.disabled = false; blogSub.textContent = "投稿する ▶";
       });
 
@@ -828,6 +871,41 @@
     }
     .fc-del-btn:hover { color:var(--accent2); background:rgba(255,107,53,.1); }
 
+    /* ファンクラブ限定チェックボックス */
+    .fc-only-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .72rem;
+      color: var(--accent3);
+      cursor: pointer;
+      user-select: none;
+    }
+    .fc-only-label input[type="checkbox"] {
+      accent-color: var(--accent3);
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+
+    /* FC限定投稿バッジ */
+    .fc-post-badge {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .65rem;
+      color: var(--accent3);
+      border: 1px solid var(--accent3);
+      border-radius: 3px;
+      padding: 1px 6px;
+      letter-spacing: .05em;
+    }
+
+    /* FC限定投稿カード */
+    .post-card.fc-post {
+      border-color: rgba(123,47,255,.3);
+      background: rgba(123,47,255,.04);
+    }
+
     .empty-msg {
       text-align:center; color:var(--text-dim);
       font-family:'Share Tech Mono',monospace; font-size:.78rem;
@@ -1271,6 +1349,10 @@
           <textarea id="blog-textarea" class="hud-input warm" placeholder="今何してる？近況を書いてみよう… (最大140文字)" maxlength="140"></textarea>
           <div class="form-footer">
             <span class="char-count" id="blog-char-count">0 / 140</span>
+            <label class="fc-only-label">
+              <input type="checkbox" id="blog-fc-only" />
+              <span>🎫 ファンクラブに書く</span>
+            </label>
             <button class="hud-btn hud-btn-primary" id="blog-submit-btn">投稿する ▶</button>
           </div>
         </div>
@@ -1396,10 +1478,35 @@
             <button class="hud-btn hud-btn-ghost" id="fc-leave-btn">⏏ 退出</button>
           </div>
 
-          <div class="fc-content-placeholder">
-            🚧 CONTENT COMING SOON 🚧<br><br>
-            ここにファンクラブ限定コンテンツが<br>
-            追加されていく予定です。お楽しみに！
+          <!-- ファンクラブ限定リンク -->
+          <div class="card accent3" style="margin-bottom:16px;padding:20px 24px;">
+            <div class="section-title purple" style="margin-bottom:14px;">FC限定リンク</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <a class="link-card" href="https://uneven-tub-4c4.notion.site/1-7-3216b0558d7381e0b03cd65695b2470c?pvs=74" target="_blank" rel="noopener">
+                <div class="link-card-icon">📓</div>
+                <div class="link-card-body">
+                  <div class="link-card-title" style="color:var(--accent3);">Notion — 1-7キャラ百科</div>
+                  <div class="link-card-desc">クラスキャラクターまとめ</div>
+                </div>
+                <div class="link-card-arrow">→</div>
+              </a>
+              <a class="link-card" href="https://sites.google.com/view/dainisshinteikokukennpou/%E7%AC%AC%E6%97%A5%E9%80%B2%E5%B8%9D%E5%9C%8B%E6%86%B2%E6%B3%95" target="_blank" rel="noopener">
+                <div class="link-card-icon">📜</div>
+                <div class="link-card-body">
+                  <div class="link-card-title" style="color:var(--accent3);">第二進帝国憲法</div>
+                  <div class="link-card-desc">Googleサイト</div>
+                </div>
+                <div class="link-card-arrow">→</div>
+              </a>
+            </div>
+          </div>
+
+          <!-- ファンクラブ限定ブログ投稿 -->
+          <div class="card" style="margin-bottom:16px;padding:20px 24px;">
+            <div class="section-title" style="margin-bottom:14px;">🎫 FC限定ブログ</div>
+            <div class="posts-list" id="fc-blog-list">
+              <div class="empty-msg">読み込み中...</div>
+            </div>
           </div>
 
           <!-- 管理者パネル（パスワード認証後のみ） -->
