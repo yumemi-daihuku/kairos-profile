@@ -125,8 +125,13 @@
               style="display:${isAdmin?"inline-block":"none"}">✕</button>
           </div>
           <div class="post-body">${esc(p.content)}</div>
+          <div class="stamp-bar" data-post="${p.id}">
+            ${stampBarHTML(p.id, stampsData[p.id])}
+          </div>
         </div>`).join("");
       bindDeleteBtns();
+      // スタンプボタンにイベント登録
+      document.querySelectorAll(".stamp-bar").forEach(bar => bindStampBtns(bar));
     });
 
     async function submitPost(content, fcOnly) {
@@ -135,6 +140,56 @@
         content:   content.trim(),
         fcOnly:    fcOnly === true,
         createdAt: Date.now()
+      });
+    }
+
+
+    /* ── スタンプ機能 ─────────────────────────────────────────── */
+    const STAMP_EMOJIS = ["👍","❤️","😂","😮","🎮","✨"];
+    const stampsRef = ref(db, "blog/stamps");
+
+    // スタンプを押す（インクリメント）
+    async function pressStamp(postId, emoji) {
+      const key = encodeEmoji(emoji);
+      await runTransaction(ref(db, `blog/stamps/${postId}/${key}`), n => (n || 0) + 1);
+    }
+
+    // 絵文字をFirebaseキーに変換（特殊文字対策）
+    function encodeEmoji(emoji) {
+      return [...emoji].map(c => c.codePointAt(0).toString(16)).join("_");
+    }
+
+    // スタンプバーHTMLを生成
+    function stampBarHTML(postId, stamps) {
+      return STAMP_EMOJIS.map(emoji => {
+        const key   = encodeEmoji(emoji);
+        const count = stamps?.[key] || 0;
+        return `<button class="stamp-btn" data-post="${postId}" data-emoji="${emoji}">
+          <span>${emoji}</span>
+          <span class="stamp-count">${count > 0 ? count : ""}</span>
+        </button>`;
+      }).join("");
+    }
+
+    // 全投稿のスタンプをリアルタイム購読してレンダリング
+    let stampsData = {}; // キャッシュ
+    onValue(stampsRef, snap => {
+      stampsData = snap.val() || {};
+      // 表示中の全スタンプバーを更新
+      document.querySelectorAll(".stamp-bar").forEach(bar => {
+        const postId = bar.dataset.post;
+        bar.innerHTML = stampBarHTML(postId, stampsData[postId]);
+        bindStampBtns(bar);
+      });
+    });
+
+    function bindStampBtns(container) {
+      container.querySelectorAll(".stamp-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          btn.classList.add("pressed");
+          await pressStamp(btn.dataset.post, btn.dataset.emoji);
+          setTimeout(() => btn.classList.remove("pressed"), 600);
+        });
       });
     }
 
@@ -1181,6 +1236,53 @@
       width: 100%;
       min-height: 1em;
     }
+
+
+    /* ── スタンプ機能 ──────────────────────────── */
+    .stamp-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,.06);
+    }
+
+    .stamp-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: rgba(0,0,0,.2);
+      font-size: .85rem;
+      cursor: pointer;
+      transition: border-color .2s, background .2s, transform .1s;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .stamp-btn:hover {
+      border-color: var(--accent3);
+      background: rgba(123,47,255,.1);
+      transform: scale(1.08);
+    }
+
+    .stamp-btn.pressed {
+      border-color: var(--accent3);
+      background: rgba(123,47,255,.15);
+    }
+
+    .stamp-count {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .72rem;
+      color: var(--text-dim);
+      min-width: 10px;
+    }
+
+    .stamp-btn:hover .stamp-count { color: var(--accent3); }
+    .stamp-btn.pressed .stamp-count { color: var(--accent3); }
 
     /* ══════════════════════════════════════════
        モバイル対応
